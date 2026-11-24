@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#8c9d99">
+<title>다이아몬드 시험</title>
+<style>
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; height:100%; background:#8c9d99; color:#f6f2ec; overflow:hidden;
+    font-family:"Cormorant Garamond","Nanum Myeongjo","Apple SD Gothic Neo",Georgia,serif;
+    overscroll-behavior:none; touch-action:none; user-select:none; -webkit-user-select:none; }
+  canvas { position:fixed; inset:0; width:100%; height:100%; display:block; }
+  #hint { position:fixed; left:0; right:0; bottom:calc(9vh + env(safe-area-inset-bottom)); text-align:center;
+    font-size:13px; letter-spacing:.42em; text-indent:.42em; opacity:.0; transition:opacity 1.2s ease; pointer-events:none;
+    text-shadow:0 0 12px rgba(40,55,52,.45); }
+  #hint.on { opacity:.85; }
+  #msg { position:fixed; top:calc(10px + env(safe-area-inset-top)); left:0; right:0; text-align:center; font:12px -apple-system,sans-serif; opacity:.8; pointer-events:none; }
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="hint">눌러서 열기</div>
+<div id="msg"></div>
+<script>
+(function () {
+'use strict';
+/* 나중에 웨딩 사진 주소 9개를 여기에 넣는다. 비어 있으면 임시 그림. */
+var PHOTOS = [];
+
+var cv = document.getElementById('cv'), hint = document.getElementById('hint'), msg = document.getElementById('msg');
+var gl = cv.getContext('webgl', { alpha:false, antialias:true, powerPreference:'high-performance' });
+if (!gl) { msg.textContent = '이 브라우저에서는 화면을 그릴 수 없어요'; return; }
+var Q = new URLSearchParams(location.search);
+
+/* ───────── 작은 도구 ───────── */
+var seed = 7;
+function rnd() { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }
+function sh(type, src) { var s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { console.error(gl.getShaderInfoLog(s)); msg.textContent = '셰이더 오류'; } return s; }
+function prog(vs, fs) { var p = gl.createProgram(); gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) console.error(gl.getProgramInfoLog(p));
+  var u = {}, n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (var i = 0; i < n; i++) { var info = gl.getActiveUniform(p, i); u[info.name] = gl.getUniformLocation(p, info.name); }
+  return { p:p, u:u, a:function (name) { return gl.getAttribLocation(p, name); } }; }
+var PREC = '#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\n';
+var HASH = 'float hash(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }\n';
+
+/* ═════════ 1. 면 화면 (다가간 뒤) ═════════ */
+var D2R = Math.PI / 180, CEN = [0, 0.04];
+var TR = [0.50, 0.33], SR = [0.76, 0.52], GR = [2.0, 1.9], MR = [2.25, 2.1];
+function ring(R, deg, jit) { var a = deg * D2R, j = 1 + (rnd() - .5) * jit; return [CEN[0] + R[0] * j * Math.cos(a), CEN[1] + R[1] * j * Math.sin(a)]; }
+var T = [], S = [], G = [], M = [];
+for (var k = 0; k < 8; k++) {
+  T.push(ring(TR, 22.5 + 45 * k + (rnd() - .5) * 9, .14));
+  S.push(ring(SR, 45 * (k + 1) + (rnd() - .5) * 10, .16));
+  G.push(ring(GR, 22.5 + 45 * k, 0)); M.push(ring(MR, 45 * (k + 1), 0));
+}
+var facets = [];
+facets.push({ kind:0, pts:T.slice(), photo:0, dir:[0, 0], light:[0.35, -0.6] });
+for (k = 0; k < 8; k++) { var a = (22.5 + 45 * k) * D2R, p = (k + 7) % 8;
+  facets.push({ kind:0, pts:[T[k], S[p], G[k], S[k]], photo:k + 1, dir:[0.95 * Math.cos(a), 0.95 * Math.sin(a)], light:[Math.cos(a), Math.sin(a)] }); }
+for (k = 0; k < 8; k++) { var n = (k + 1) % 8, am = 45 * (k + 1) * D2R, L = [Math.cos(am), Math.sin(am)];
+  facets.push({ kind:1, pts:[T[k], S[k], T[n]], photo:(k * 3 + 2) % 9, light:L });
+  facets.push({ kind:1, pts:[S[k], G[k], M[k]], photo:(k * 5 + 4) % 9, light:[L[1], -L[0]] });
+  facets.push({ kind:1, pts:[S[k], M[k], G[n]], photo:(k * 7 + 1) % 9, light:[-L[1], L[0]] }); }
+var tints = [[1, .97, .93], [1, .84, .74], [1, .8, .88], [.88, .95, 1]];
+var fv = [];
+facets.forEach(function (f) {
+  var cx = 0, cy = 0; f.pts.forEach(function (q) { cx += q[0]; cy += q[1]; }); cx /= f.pts.length; cy /= f.pts.length;
+  f.start = fv.length / 3;
+  for (var i = 0; i < f.pts.length; i++) { var q = f.pts[i], r = f.pts[(i + 1) % f.pts.length]; fv.push(cx, cy, 0, q[0], q[1], 1, r[0], r[1], 1); }
+  f.count = fv.length / 3 - f.start;
+  f.ph = rnd() * 6.28; f.kx = (rnd() - .5) * 14; f.ky = (rnd() - .5) * 14; f.sp = .15 + rnd() * .35; f.tint = tints[Math.floor(rnd() * tints.length)]; f.w = 0;
+});
+var facetBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, facetBuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(fv), gl.STATIC_DRAW);
+var photoFacets = facets.filter(function (f) { return f.kind === 0; });
+
+var FP = prog(
+  'attribute vec3 aP; uniform vec2 uF,uC; uniform float uA,uZoom,uG; varying vec2 vB; varying float vE;' +
+  'void main(){ vec2 d=aP.xy-uF; vec2 dd=vec2(d.x*uA,d.y); float m=1.0+uG*exp(-dot(dd,dd)/0.22);' +
+  ' vec2 p=uF+d*m-(uF-uC)*0.55; p=uC+(p-uC)*uZoom; vB=vec2(aP.x*uA,aP.y); vE=aP.z; gl_Position=vec4(p.x,-p.y,0.0,1.0); }',
+  PREC + HASH +
+  'uniform sampler2D uSharp,uBlur; uniform float uW,uAlpha,uTime,uKind,uHh,uSpark; uniform vec2 uFc,uT,uLight; uniform vec3 uTint; varying vec2 vB; varying float vE;' +
+  'void main(){ vec2 uv=(vB-uFc)/vec2(uHh*1.3333,uHh*2.0)+0.5; uv-=uT*0.03;' +
+  ' vec3 haze=vec3(0.55,0.63,0.61); vec3 bl=texture2D(uBlur,uv).rgb; float g=dot(vB-uFc,uLight)/uHh; vec3 col;' +
+  ' if(uKind<0.5){ vec3 soft=mix(bl,haze,0.22)*(0.92+0.16*g); col=mix(soft,texture2D(uSharp,uv).rgb,uW);' +
+  '   col*=1.0-0.16*smoothstep(0.55,0.97,vE)*(1.0-uW); }' +
+  ' else { col=mix(bl,haze,0.45)*(0.80+0.22*g); col+=uTint*uSpark*(0.55+0.45*smoothstep(1.0,0.0,vE)); }' +
+  ' float line=smoothstep(0.93,1.0,vE); col+=vec3(1.0,0.97,0.94)*line*line*(0.30-0.12*uW);' +
+  ' col+=(hash(gl_FragCoord.xy+fract(uTime)*91.7)-0.5)*0.075;' +
+  ' gl_FragColor=vec4(col,uAlpha); }');
+var fpA = FP.a('aP');
+
+/* 사진 틀(면마다 사진이 어디에 얼마나 크게 놓이는지) — 화면 비율이 바뀌면 다시 계산 */
+function layoutFacets(A) {
+  facets.forEach(function (f) {
+    var x0 = 9, x1 = -9, y0 = 9, y1 = -9, lim = f.kind === 0 ? 1.12 : 1.3;
+    f.pts.forEach(function (q) { var x = Math.max(-lim, Math.min(lim, q[0])) * A, y = Math.max(-lim, Math.min(lim, q[1]));
+      x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); });
+    f.fc = [(x0 + x1) / 2, (y0 + y1) / 2]; f.hh = Math.max((y1 - y0) / 2, (x1 - x0) / 2 * 1.5) * 1.05;
+    f.fn = [f.fc[0] / A, f.fc[1]];
+  });
+}
+
+/* 사진 → 또렷한 판 + 흐린 판 */
+var texSharp = [], texBlur = [];
+function mkTex(src, mip) { var t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, src);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.MIRRORED_REPEAT); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.MIRRORED_REPEAT);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  if (mip) { gl.generateMipmap(gl.TEXTURE_2D); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR); }
+  else gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  return t; }
+function setPhoto(i, source) { // source = 512x512 캔버스(2:3 그림을 정사각으로 눌러 담음)
+  texSharp[i] = mkTex(source, true);
+  var s1 = document.createElement('canvas'); s1.width = s1.height = 20; s1.getContext('2d').drawImage(source, 0, 0, 20, 20);
+  var s2 = document.createElement('canvas'); s2.width = s2.height = 64; var c2 = s2.getContext('2d'); c2.imageSmoothingEnabled = true; c2.imageSmoothingQuality = 'high';
+  c2.drawImage(s1, 0, 0, 64, 64); c2.globalAlpha = .5; c2.drawImage(s2, -2, 0); c2.drawImage(s2, 2, 0); c2.drawImage(s2, 0, -2); c2.drawImage(s2, 0, 2);
+  texBlur[i] = mkTex(s2, false);
+}
+var tones = [['#eadbd0', '#b48b82'], ['#d8e0e7', '#7d91a6'], ['#efe4ca', '#bfa066'], ['#dfe8dc', '#86a083'], ['#ebd7df', '#ad7c92'],
+             ['#dad7eb', '#8781b0'], ['#f0ddce', '#c68a67'], ['#d4e6e7', '#6c9fa2'], ['#e9e2d7', '#998c79']];
+function placeholder(i) {
+  var c = document.createElement('canvas'); c.width = c.height = 512; var x = c.getContext('2d'); x.scale(512 / 400, 512 / 600);
+  var g = x.createLinearGradient(0, 0, 400, 600); g.addColorStop(0, tones[i][0]); g.addColorStop(1, tones[i][1]); x.fillStyle = g; x.fillRect(0, 0, 400, 600);
+  x.strokeStyle = 'rgba(255,255,255,.35)'; x.lineWidth = 2; for (var s = -14; s < 20; s++) { x.beginPath(); x.moveTo(s * 22, 0); x.lineTo(s * 22 + 300, 600); x.stroke(); }
+  x.fillStyle = 'rgba(255,255,255,.93)'; x.beginPath(); x.arc(170, 235, 32, 0, 7); x.fill(); x.beginPath(); x.ellipse(170, 345, 40, 78, 0, 0, 7); x.fill();
+  x.fillStyle = 'rgba(52,60,58,.9)'; x.beginPath(); x.arc(246, 222, 30, 0, 7); x.fill(); x.beginPath(); x.ellipse(246, 338, 34, 84, 0, 0, 7); x.fill();
+  x.fillStyle = '#fff'; x.font = '44px Georgia,serif'; x.textAlign = 'center'; x.fillText('사진 ' + (i + 1), 200, 490);
+  return c;
+}
+for (var i = 0; i < 9; i++) setPhoto(i, placeholder(i));
+PHOTOS.forEach(function (url, i) { if (!url || i > 8) return; var im = new Image();
+  im.onload = function () { var c = document.createElement('canvas'); c.width = c.height = 512; var x = c.getContext('2d');
+    var ar = im.width / im.height, want = 2 / 3, sw = im.width, shh = im.height; if (ar > want) sw = im.height * want; else shh = im.width / want;
+    x.drawImage(im, (im.width - sw) / 2, (im.height - shh) / 2, sw, shh, 0, 0, 512, 512); setPhoto(i, c); };
+  im.src = url; });
+
+/* ═════════ 2. 첫 장면 (떠 있는 다이아몬드) ═════════ */
+var HH = 0.33, WK = 0.30, C0 = [0, 0.07];
+function outline(t) { return [WK * Math.sin(t) * Math.pow((1 - Math.cos(t)) / 2, 0.6), -HH * Math.cos(t)]; }
+function lerp2(a, b, f) { return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]; }
+var gG = [], gM = [], gT = [], gS = [];
+for (k = 0; k < 8; k++) { gG.push(outline(6.2832 * k / 8)); gM.push(outline(6.2832 * (k + .5) / 8)); }
+for (k = 0; k < 8; k++) { gT.push(lerp2(C0, gG[k], .46 + rnd() * .06)); gS.push(lerp2(C0, gM[k], .68 + rnd() * .06)); }
+var gemPolys = [gT.slice()];
+for (k = 0; k < 8; k++) { var nn = (k + 1) % 8, pp = (k + 7) % 8;
+  gemPolys.push([gT[k], gS[k], gT[nn]], [gT[k], gS[pp], gG[k], gS[k]], [gS[k], gG[k], gM[k]], [gS[k], gM[k], gG[nn]]); }
+var sil = []; for (k = 0; k < 8; k++) { sil.push(gG[k], gM[k]); }
+function inside(pt, poly) { var c = false; for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) { var a = poly[i], b = poly[j];
+  if ((a[1] > pt[1]) !== (b[1] > pt[1]) && pt[0] < (b[0] - a[0]) * (pt[1] - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; }
+var gpos = [], gtri = []; // gtri: 삼각형마다 성질
+gemPolys.forEach(function (poly) { var cx = 0, cy = 0; poly.forEach(function (q) { cx += q[0]; cy += q[1]; }); cx /= poly.length; cy /= poly.length;
+  cx += (rnd() - .5) * .02; cy += (rnd() - .5) * .02;
+  for (var i = 0; i < poly.length; i++) { var q = poly[i], r = poly[(i + 1) % poly.length]; gpos.push(cx, cy, q[0], q[1], r[0], r[1]);
+    gtri.push({ spark:0, base:.34 + rnd() * .34, amp:.12 + rnd() * .22, ph:rnd() * 6.28, sp:.25 + rnd() * .6, x:(cx + q[0] + r[0]) / 3 }); } });
+var nSpark = 0;
+while (nSpark < 190) { var pt = [(rnd() - .5) * .5, (rnd() - .5) * .7 + C0[1] - .07]; if (!inside(pt, sil)) continue;
+  var sz = .004 + rnd() * rnd() * .022, ang = rnd() * 6.28;
+  for (var v = 0; v < 3; v++) gpos.push(pt[0] + sz * Math.cos(ang + v * 2.094 + rnd() * .5), pt[1] + sz * Math.sin(ang + v * 2.094 + rnd() * .5));
+  gtri.push({ spark:1, ph:rnd() * 6.28, sp:.5 + rnd() * 1.6, pw:5 + rnd() * 14, tint:tints[Math.floor(rnd() * 3)], x:pt[0] }); nSpark++; }
+var gemPosBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, gemPosBuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(gpos), gl.STATIC_DRAW);
+var gcol = new Float32Array(gtri.length * 12), gemColBuf = gl.createBuffer();
+
+var GP = prog(
+  'attribute vec2 aP; attribute vec4 aC; uniform float uA,uZ; uniform vec2 uRot,uOff,uC0; varying vec4 vC;' +
+  'void main(){ vec2 q=aP-uC0; q=vec2(q.x*uRot.x-q.y*uRot.y,q.x*uRot.y+q.y*uRot.x)*uZ+uOff; vC=aC; gl_Position=vec4(q.x/uA,-q.y,0.0,1.0); }',
+  PREC + 'varying vec4 vC; void main(){ gl_FragColor=vC; }');
+var gpP = GP.a('aP'), gpC = GP.a('aC');
+
+var FBW = 256, FBH = 512, fboTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, fboTex);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, FBW, FBH, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+var fbo = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fbo); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fboTex, 0);
+gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+var quadBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+
+var PP = prog(
+  'attribute vec2 aP; varying vec2 vU; void main(){ vU=aP*0.5+0.5; gl_Position=vec4(aP,0.0,1.0); }',
+  PREC + HASH +
+  'uniform sampler2D uTex; uniform vec2 uPx; uniform float uBlur,uTime,uFlash,uA,uBokeh; varying vec2 vU;' +
+  'void main(){ vec3 c=texture2D(uTex,vU).rgb; vec3 bloom=vec3(0.0); float a=0.0;' +
+  ' for(int i=1;i<=18;i++){ float fi=float(i); a+=2.39996; float r=sqrt(fi/18.0); vec2 o=vec2(cos(a),sin(a))*r;' +
+  '   c+=texture2D(uTex,vU+o*uPx*uBlur).rgb; vec3 b=texture2D(uTex,vU+o*uPx*uBlur*3.4).rgb; bloom+=max(b-0.62,0.0); }' +
+  ' c/=19.0; c+=bloom/18.0*2.6*vec3(1.0,0.93,0.88);' +
+  ' vec2 s=vec2((vU.x-0.5)*2.0*uA,(0.5-vU.y)*2.0);' +
+  ' float bd=length(s-vec2(0.085,-0.20)); c=mix(c,vec3(0.90,0.76,0.83),smoothstep(0.115,0.05,bd)*0.42*uBokeh);' +
+  ' c*=1.0-0.20*dot(s,s)*0.6; c=mix(c,vec3(0.56,0.64,0.61),0.10);' +
+  ' c+=(hash(gl_FragCoord.xy+fract(uTime)*77.3)-0.5)*0.10; c=mix(c,vec3(1.0,0.965,0.93),uFlash);' +
+  ' gl_FragColor=vec4(c,1.0); }');
+var ppP = PP.a('aP');
+
+/* ═════════ 3. 기울기 · 손가락 ═════════ */
+var target = [0, 0], cur = [0, 0], base = null, sensorLive = false, dragging = false, RANGE = 22;
+function clampLen(v, m) { var l = Math.hypot(v[0], v[1]); return l > m ? [v[0] / l * m, v[1] / l * m] : v; }
+function onOri(e) { if (e.beta == null) return; sensorLive = true; var g = e.gamma || 0, b = e.beta || 0;
+  if (!base) base = [g, b];
+  var raw = [-(g - base[0]) / RANGE, -(b - base[1]) / RANGE], l = Math.hypot(raw[0], raw[1]);
+  if (l > 1.35) { var ex = (l - 1.35) / l; base[0] -= raw[0] * ex * RANGE; base[1] -= raw[1] * ex * RANGE; } // 자세가 바뀌면 가운데가 따라옴
+  if (!dragging) target = clampLen(raw, 1); }
+function startSensor() { var D = window.DeviceOrientationEvent;
+  function listen() { window.addEventListener('deviceorientation', onOri, true); }
+  if (D && typeof D.requestPermission === 'function') D.requestPermission().then(function (r) { if (r === 'granted') listen(); }).catch(function () {});
+  else if (D) listen(); }
+function fromPoint(e) { target = clampLen([(e.clientX / innerWidth - .5) * 2.3, (e.clientY / innerHeight - .5) * 2.3], 1); }
+cv.addEventListener('pointerdown', function (e) { if (stage === 0) { open(); return; } dragging = true; fromPoint(e); });
+cv.addEventListener('pointermove', function (e) { if (stage === 2 && (dragging || (e.pointerType === 'mouse' && !sensorLive))) fromPoint(e); });
+function up(e) { dragging = false; if (!sensorLive && e.pointerType !== 'mouse') target = [0, 0]; }
+cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+
+/* ═════════ 4. 흐름 ═════════ */
+var stage = 0, openAt = 0, OPEN_MS = 2800; // 0 첫 장면 · 1 다가가는 중 · 2 면 화면
+function open() { if (stage !== 0) return; stage = 1; openAt = performance.now(); hint.classList.remove('on'); startSensor();
+  setTimeout(function () { hint.textContent = sensorLive ? '폰을 기울여 보세요' : '화면을 끌어 보세요'; hint.classList.add('on'); setTimeout(function () { hint.classList.remove('on'); }, 3800); }, OPEN_MS + 500); }
+setTimeout(function () { if (stage === 0) hint.classList.add('on'); }, 900);
+if (Q.get('skip')) { stage = 2; }
+
+var W = 0, H = 0, A = 1;
+function resize() { var dpr = Math.min(window.devicePixelRatio || 1, 2); W = Math.round(innerWidth * dpr); H = Math.round(innerHeight * dpr);
+  cv.width = W; cv.height = H; A = W / H; layoutFacets(A); }
+window.addEventListener('resize', resize); resize();
+function sm(a, b, x) { x = Math.max(0, Math.min(1, (x - a) / (b - a))); return x * x * (3 - 2 * x); }
+
+gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+function drawIntro(time, p) {
+  /* 색 채우기 */
+  var tl = cur[0] * 3 + cur[1] * 2, j = 0;
+  for (var i = 0; i < gtri.length; i++) { var t = gtri[i], r, g, b, al;
+    if (t.spark) { var s = Math.pow(Math.max(0, Math.sin(t.ph + time * t.sp + tl * 2)), t.pw); r = t.tint[0]; g = t.tint[1]; b = t.tint[2]; al = s; }
+    else { var sd = t.base + t.amp * Math.sin(t.ph + time * t.sp + tl); sd *= .55 + .45 * sm(-.2, .12, t.x); r = sd * .80; g = sd * .89; b = sd * .87; al = 1; }
+    for (var v = 0; v < 3; v++) { gcol[j++] = r; gcol[j++] = g; gcol[j++] = b; gcol[j++] = al; } }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo); gl.viewport(0, 0, FBW, FBH);
+  gl.clearColor(.55, .63, .61, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.useProgram(GP.p);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gemPosBuf); gl.enableVertexAttribArray(gpP); gl.vertexAttribPointer(gpP, 2, gl.FLOAT, false, 0, 0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gemColBuf); gl.bufferData(gl.ARRAY_BUFFER, gcol, gl.DYNAMIC_DRAW); gl.enableVertexAttribArray(gpC); gl.vertexAttribPointer(gpC, 4, gl.FLOAT, false, 0, 0);
+  var e = Math.pow(p, 1.7), z = Math.exp(Math.log(20) * e) * (1 + .012 * Math.sin(time * .5)), rot = (Math.sin(time * .23) * 3.5 + 6 - e * 6) * D2R;
+  gl.uniform1f(GP.u.uA, A); gl.uniform1f(GP.u.uZ, z); gl.uniform2f(GP.u.uRot, Math.cos(rot), Math.sin(rot));
+  gl.uniform2f(GP.u.uOff, Math.sin(time * .31) * .006 * (1 - e), -0.03 * (1 - e) + CEN[1] * e + Math.sin(time * .4) * .008 * (1 - e)); gl.uniform2f(GP.u.uC0, C0[0], C0[1]);
+  gl.drawArrays(gl.TRIANGLES, 0, gtri.length * 3);
+  gl.disableVertexAttribArray(gpC);
+  /* 흐림 · 번짐 · 입자 */
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H);
+  gl.useProgram(PP.p); gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf); gl.enableVertexAttribArray(ppP); gl.vertexAttribPointer(ppP, 2, gl.FLOAT, false, 0, 0);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fboTex); gl.uniform1i(PP.u.uTex, 0);
+  gl.uniform2f(PP.u.uPx, 1 / FBW, 1 / FBH); gl.uniform1f(PP.u.uBlur, 2.6 + 7 * e); gl.uniform1f(PP.u.uTime, time); gl.uniform1f(PP.u.uA, A);
+  gl.uniform1f(PP.u.uBokeh, 1 - sm(0, .35, p)); gl.uniform1f(PP.u.uFlash, .9 * Math.exp(-Math.pow((p - .68) / .16, 2)));
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+function drawFacets(time, alpha, zoom) {
+  /* 어느 면이 정면인가 */
+  var fx = 0, fy = 0, ws = 0;
+  photoFacets.forEach(function (f) { var d = Math.hypot(cur[0] - f.dir[0], cur[1] - f.dir[1]);
+    f.w = sm(0, 1, 1 - (d - .22) / .42); var w2 = Math.exp(-d * d / .16); fx += f.fn[0] * w2; fy += f.fn[1] * w2; ws += w2; });
+  fx /= ws; fy /= ws;
+  gl.useProgram(FP.p); gl.bindBuffer(gl.ARRAY_BUFFER, facetBuf); gl.enableVertexAttribArray(fpA); gl.vertexAttribPointer(fpA, 3, gl.FLOAT, false, 0, 0);
+  gl.uniform2f(FP.u.uF, fx, fy); gl.uniform2f(FP.u.uC, CEN[0], CEN[1]); gl.uniform1f(FP.u.uA, A); gl.uniform1f(FP.u.uZoom, zoom); gl.uniform1f(FP.u.uG, .42);
+  gl.uniform1f(FP.u.uAlpha, alpha); gl.uniform1f(FP.u.uTime, time); gl.uniform2f(FP.u.uT, cur[0], cur[1]);
+  gl.uniform1i(FP.u.uSharp, 0); gl.uniform1i(FP.u.uBlur, 1);
+  for (var i = 0; i < facets.length; i++) { var f = facets[i];
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, texSharp[f.photo]); gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, texBlur[f.photo]);
+    gl.uniform1f(FP.u.uKind, f.kind); gl.uniform1f(FP.u.uW, f.kind === 0 ? f.w : 0); gl.uniform2f(FP.u.uFc, f.fc[0], f.fc[1]); gl.uniform1f(FP.u.uHh, f.hh);
+    gl.uniform2f(FP.u.uLight, f.light[0], f.light[1]);
+    if (f.kind === 1) { gl.uniform1f(FP.u.uSpark, Math.pow(Math.max(0, Math.sin(f.ph + cur[0] * f.kx + cur[1] * f.ky + time * f.sp)), 10) * .75); gl.uniform3f(FP.u.uTint, f.tint[0], f.tint[1], f.tint[2]); }
+    gl.drawArrays(gl.TRIANGLES, f.start, f.count); }
+}
+
+function frame(now) {
+  var time = now / 1000;
+  cur[0] += (target[0] - cur[0]) * .11; cur[1] += (target[1] - cur[1]) * .11;
+  var p = stage === 0 ? 0 : stage === 2 ? 1 : Math.min(1, (now - openAt) / OPEN_MS);
+  if (stage === 1 && p >= 1) stage = 2;
+  if (stage === 0 && !sensorLive) { target = [Math.sin(time * .35) * .25, Math.cos(time * .27) * .2]; }
+  else if (stage === 1 && !sensorLive && !dragging) target = [0, 0];
+  if (p < .92) drawIntro(time, p); else { gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H); }
+  var fa = sm(.60, .86, p);
+  if (fa > 0) drawFacets(time, fa, .62 + .38 * (1 - Math.pow(1 - sm(.55, 1, p), 2)));
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
