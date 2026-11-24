@@ -98,7 +98,7 @@ var HASH = 'float hash(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32
 var SCENE = prog(VS, [
 'precision highp float;',
 'varying vec2 vU; uniform float uA,uTan,uRsv,uSpark,uTime,uGain,uMetal,uHistW; uniform vec2 uJit; uniform sampler2D uHist; uniform vec3 uCam; uniform mat3 uR; uniform vec4 uGem;',
-'uniform vec3 uCa[24]; uniform sampler2D uDepth; uniform vec4 uPl[73]; uniform vec3 uFC[9]; uniform vec3 uFU[9]; uniform vec3 uFV[9]; uniform vec2 uFO[9]; uniform sampler2D uSharp,uSoft;',
+'uniform vec3 uCa[24]; uniform sampler2D uDepth; uniform vec3 uFocC,uFocU,uFocV,uFocO; uniform float uReflW; uniform vec4 uPl[73]; uniform vec3 uFC[9]; uniform vec3 uFU[9]; uniform vec3 uFV[9]; uniform vec2 uFO[9]; uniform sampler2D uSharp,uSoft;',
 'const float F0=0.172;', HASH,
 'float vn(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.0-2.0*f); return mix(mix(hash(i),hash(i+vec2(1.0,0.0)),f.x),mix(hash(i+vec2(0.0,1.0)),hash(i+vec2(1.0,1.0)),f.x),f.y); }',
 'float fbm(vec2 p){ float a=0.5,s=0.0; for(int i=0;i<4;i++){ s+=a*vn(p); p=p*2.03+7.1; a*=0.5; } return s; }',
@@ -206,6 +206,18 @@ var SCENE = prog(VS, [
 '        ph*=mix(0.50+0.50*wall,0.86+0.14*wall,dp); ph=mix(ph,ph*0.88+vec3(0.05,0.06,0.06),(1.0-dp)*0.5);',
 '        float al=mix(0.20,0.62+0.22*w,uRsv);',
 '        gem=gem*(1.0-al)+ph*al+max(gem-0.9,0.0)*0.20*al+refl*F*0.3*al;',
+'      }',
+'      if(fi>8.5 && fi<32.5 && uRsv>0.02){',
+'        float h1=hash(vec2(fi,3.1)); float h2=hash(vec2(fi,7.7)); float an=(h1-0.5)*1.8; float cs=cos(an); float sn=sin(an);',
+'        vec3 rr=reflect(d,nN); vec2 lp=vec2(dot(p-uFocC,uFocU),-dot(p-uFocC,uFocV))*(0.55+0.5*h2);',
+'        lp=vec2(lp.x*cs-lp.y*sn,lp.x*sn+lp.y*cs)+(vec2(h2,h1)-0.5)*0.22+vec2(dot(rr,uFocU),-dot(rr,uFocV))*0.35;',
+'        vec2 cell=vec2(mod(uFocO.z,3.0),floor(uFocO.z/3.0+0.001)); vec2 ca=vec2(cs,sn)*0.014;',
+'        vec2 u0=uFocO.xy+lp; float inb=step(0.02,u0.x)*step(u0.x,0.98)*step(0.02,u0.y)*step(u0.y,0.98); u0=clamp(u0,0.02,0.98);',
+'        vec3 rp=vec3(texture2D(uSharp,(cell+u0+ca)/3.0,2.6).r,texture2D(uSharp,(cell+u0)/3.0,2.6).g,texture2D(uSharp,(cell+u0-ca)/3.0,2.6).b);',
+'        float ra=0.48*uRsv*uReflW*inb*(0.6+0.4*h1);',
+'        gem=mix(gem,rp*1.05+max(gem-0.9,0.0)*0.3,ra);',
+'        float bx=dot(p-uFocC,vec3(cs,0.0,sn))*3.0+h2*4.0+dot(rr,vec3(1.0,0.0,0.6))*2.0; float bm=smoothstep(0.82,1.0,sin(bx*2.1+h1*6.0))*step(0.55,h2);',
+'        gem+=(0.5+0.5*cos(6.2832*(bx*0.9+vec3(0.0,0.33,0.67))))*bm*0.50*uRsv;',
 '      }',
 '      gem+=vec3(1.0,0.98,0.95)*edge*0.20;',
 '      col=gem;',
@@ -316,7 +328,7 @@ setTimeout(function () { if (stage === 0) hint.classList.add('on'); }, 900);
 if (Q.get('skip')) stage = 2;
 
 var frames = 0, acc = 0, last = 0, glint = 0, lam1S = 0, lam2S = 0, fcount = 0, vel = 0, cv2 = [0, 0];
-var CA_ = new Float32Array(72);
+var CA_ = new Float32Array(72), focI = 0, reflW = 0;
 var HAL = [[.5,.333],[.25,.667],[.75,.111],[.125,.444],[.625,.778],[.375,.222],[.875,.556],[.0625,.889]];
 var SAMP = []; (function () { for (var i = 0; i < 16; i++) { var t = i / 16 * 4, x, y; if (t < 1) { x = -1 + 2 * t; y = 1; } else if (t < 2) { x = 1; y = 1 - 2 * (t - 1); } else if (t < 3) { x = 1 - 2 * (t - 2); y = -1; } else { x = -1; y = -1 + 2 * (t - 3); } SAMP.push([x * 1.06, y * 1.06]); } })();
 function filled(R, tw, dist) { // 화면 가장자리 16곳에서 쏜 선이 모두 보석에 닿는가
@@ -374,6 +386,10 @@ function frame(now) {
   gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, texSoft); gl.uniform1i(SCENE.u('uSoft'), 1);
   gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, fboTexs[flip ^ 1]); gl.uniform1i(SCENE.u('uHist'), 2);
   gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, texDepth); gl.uniform1i(SCENE.u('uDepth'), 3);
+  var bi = 0, bf = -9; for (var qi = 0; qi < 9; qi++) { var fy_ = R[3] * planes[qi][0] + R[4] * planes[qi][1] + R[5] * planes[qi][2]; if (fy_ > bf) { bf = fy_; bi = qi; } }
+  if (bi !== focI) { focI = bi; reflW = 0; } reflW += (1 - reflW) * .06;
+  gl.uniform3f(SCENE.u('uFocC'), uFC[focI * 3], uFC[focI * 3 + 1], uFC[focI * 3 + 2]); gl.uniform3f(SCENE.u('uFocU'), uFU[focI * 3], uFU[focI * 3 + 1], uFU[focI * 3 + 2]);
+  gl.uniform3f(SCENE.u('uFocV'), uFV[focI * 3], uFV[focI * 3 + 1], uFV[focI * 3 + 2]); gl.uniform3f(SCENE.u('uFocO'), uFO[focI * 2], uFO[focI * 2 + 1], focI); gl.uniform1f(SCENE.u('uReflW'), reflW);
   if (stage < 2) { var LG = [0.31, -0.84, 0.44], g0 = app(Rpre, [0, -0.3, 0]), dep = 3.2;
     for (var ci = 0; ci < 24; ci++) { var P = planes[49 + ci], nw = app(R, P), fa_ = nw[0] * LG[0] + nw[1] * LG[1] + nw[2] * LG[2];
       var dv = norm([LG[0] * .85 + nw[0] * .62, LG[1] * .85 + nw[1] * .62, LG[2] * .85 + nw[2] * .62]), inten = 0;
