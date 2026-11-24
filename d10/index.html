@@ -147,7 +147,7 @@ var SCENE = prog(VS, [
 'float smin(float a,float b,float k){ float h=clamp(0.5+0.5*(b-a)/k,0.0,1.0); return mix(b,a,h)-k*h*(1.0-h); }',
 'float sdRing(vec3 p){',
 '  vec3 q=p-vec3(0.0,-3.50,0.0); float rho=length(q.xy)-2.42; float up=clamp((q.y-1.0)/1.4,0.0,1.0);',
-'  float hw=mix(0.300,0.150,up); float ho=mix(0.150,0.115,up);',
+'  float hw=mix(0.215,0.120,up); float ho=mix(0.150,0.110,up);',
 '  float kn=(abs(q.z)*ho+rho*hw-hw*ho)/length(vec2(ho,hw));',                       // 바깥쪽이 칼날처럼 모이는 단면
 '  float band=max(max(kn,-rho-0.085),abs(q.z)-hw)-0.022;',
 '  float a=atan(p.z,p.x)+0.5236; float r=length(p.xz); float aa=mod(a+0.5236,1.0472)-0.5236;',
@@ -180,11 +180,11 @@ var SCENE = prog(VS, [
 '    float fr=pow(1.0-max(dot(-d,nm),0.0),5.0); vec3 em=env(uR*reflect(d,nm),smoothstep(1.7,0.9,length(pm))*0.8);',
 '    float ao=clamp(0.30+0.70*sdRing(pm+nm*0.3)/0.3,0.0,1.0);',
 '    vec3 rw=uR*reflect(d,nm); float az2=atan(rw.z,rw.x); float ry=rw.y;',
-'    vec3 st=mix(vec3(0.20,0.22,0.23),vec3(1.02,1.04,1.04),smoothstep(-0.50,0.30,ry));',     // 흰 촬영 천막
+'    vec3 st=mix(vec3(0.16,0.18,0.19),vec3(0.92,0.94,0.95),smoothstep(-0.50,0.30,ry));',     // 흰 촬영 천막
 '    st*=1.0-0.72*smoothstep(0.11,0.0,abs(ry+0.03))*(0.45+0.55*smoothstep(-0.4,0.4,sin(az2*2.0+1.0)));', // 또렷한 어두운 선
 '    st*=1.0-0.38*smoothstep(0.35,0.75,sin(az2*4.0+2.0))*smoothstep(0.55,0.05,ry);',
-'    st+=vec3(2.9,2.9,2.85)*smoothstep(0.56,0.62,ry)*smoothstep(0.93,0.87,ry)*smoothstep(-0.2,0.2,sin(az2*2.0+0.9));',
-'    st+=vec3(1.5,1.55,1.6)*smoothstep(0.16,0.20,ry)*smoothstep(0.34,0.30,ry)*smoothstep(0.3,0.6,sin(az2*3.0-1.2));',
+'    st+=vec3(1.25,1.25,1.22)*smoothstep(0.56,0.62,ry)*smoothstep(0.93,0.87,ry)*smoothstep(-0.2,0.2,sin(az2*2.0+0.9));',
+'    st+=vec3(0.6,0.62,0.65)*smoothstep(0.16,0.20,ry)*smoothstep(0.34,0.30,ry)*smoothstep(0.3,0.6,sin(az2*3.0-1.2));',
 '    col=(st+em*0.16)*mix(vec3(0.94,0.95,0.97),vec3(1.0),fr)*(0.34+0.66*ao); am=1.0;',
 '  } else if(hitG){',
 '    {',
@@ -269,7 +269,7 @@ var POST = prog(VS2, [
 '  c+=min(fl,vec3(12.0))*uFlare*vec3(1.0,0.96,0.92);',
 '  float am=texture2D(uTex,vU).a; vec2 pu=gl_FragCoord.xy/uPaperPx;',
 '  float h0=texture2D(uPaper,pu).r; float h1=texture2D(uPaper,pu+vec2(0.006,-0.009)).r; float big=texture2D(uPaper,pu*0.11).g;',
-'  c*=1.0+((h0-h1)*2.4+(h0-0.5)*0.30+(big-0.5)*0.22)*uTexA*(1.0-am);',
+'  c*=1.0+((h0-h1)*1.5+(h0-0.5)*0.16+(big-0.5)*0.16)*uTexA*(1.0-am);',
 '  c*=uExp; c=c/(1.0+0.20*c)*1.10;',
 '  c=mix(c,vec3(0.62,0.70,0.69),0.055);',
 '  c=mix(c,vec3(0.86,0.90,0.89),uFog*(0.55+0.25*dot(s,s)));',
@@ -463,7 +463,7 @@ function frame(now) {
   var fS = [rK * ca * s, yT + (yK - yT) * s, rK * sa * s];                    // 정면이 된 면의 가운데
   var bob = Math.sin(time * .8) * .10 * ti; var c0 = [0, -2.35 + bob, 0], foc = [c0[0] + (fS[0] - c0[0]) * e, c0[1] + (fS[1] - c0[1]) * e, c0[2] + (fS[2] - c0[2]) * e];
   var tw = app(Rpre, foc);
-  var dFar = Math.max(10.6 / A, 15.0) / (2 * TANH), dNear = (1.16 - 0.20 * s) / Math.max(1, A / 0.62) / (2 * TANH);
+  var dFar = Math.max(9.6 / A, 13.6) / (2 * TANH), dNear = (1.16 - 0.20 * s) / Math.max(1, A / 0.62) / (2 * TANH);
   var dist = dFar * Math.pow(dNear / dFar, e) * (1 + .06 * Math.sin(Math.PI * sm(0, .22, p)) * (p < .22 ? 1 : 0)) * (1 - .035 * Math.sin(Math.PI * sm(.80, 1, p))) + Math.sin(time * .5) * .12 * (1 - e);
   if (stage === 2) { var safe = app(Rpre, [0, yT, 0]), tw0 = tw, d0 = dist, l1 = 0, l2 = 0, it = 0;
     function place(a, b) { tw = [tw0[0] + (safe[0] - tw0[0]) * a, tw0[1] + (safe[1] - tw0[1]) * a, tw0[2] + (safe[2] - tw0[2]) * a]; dist = d0 * (1 - 0.6 * b); }
@@ -516,7 +516,7 @@ function frame(now) {
   var blur = (0.9 + 9 * brI + 16 * Math.exp(-time * 1.1)) * (1 - e) + (0.35 + 1.5 * br) * e + 7 * hunt;
   gl.uniform1f(POST.u('uBlur'), Math.max(blur * kpx, 0.7 / scale));
   gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, texPaper); gl.uniform1i(POST.u('uPaper'), 1);
-  gl.uniform1f(POST.u('uTexA'), .95 / (1 + blur * .30) * (1 - e)); gl.uniform1f(POST.u('uPaperPx'), 300 * kpx);
+  gl.uniform1f(POST.u('uTexA'), .55 / (1 + blur * .30) * (1 - e)); gl.uniform1f(POST.u('uPaperPx'), 190 * kpx);
   gl.uniform1f(POST.u('uEdge'), 2.0 * e * kpx); gl.uniform1f(POST.u('uBloom'), 1.0 + 2.2 * glint + .5 * brI * (1 - e));
   gl.uniform1f(POST.u('uMist'), .30 - .15 * e); gl.uniform1f(POST.u('uMistR'), 14 * kpx);
   gl.uniform1f(POST.u('uExp'), 1);
