@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>면 시험</title>
+<style>
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; height:100%; background:#8f9c9a; color:#f4f1ec; overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+    overscroll-behavior:none; touch-action:none; user-select:none; -webkit-user-select:none; }
+  #gem { position:fixed; inset:0; background:#6f7b7a; }
+  .facet { position:absolute; overflow:hidden; }
+  .facet .ph { position:absolute; inset:-9%; background-size:cover; background-position:center; will-change:transform,opacity; }
+  .facet .soft { filter:blur(14px) saturate(.8) brightness(.92); }
+  .facet .sharp { opacity:0; }
+  .facet .glint { position:absolute; inset:0; opacity:0; will-change:opacity; mix-blend-mode:screen;
+    background:linear-gradient(var(--a), rgba(255,255,255,0) 30%, rgba(255,244,236,.55) 50%, rgba(255,255,255,0) 70%); }
+  #lines { position:fixed; inset:0; width:100%; height:100%; pointer-events:none; }
+  #lines polygon { fill:none; stroke:rgba(255,255,255,.55); stroke-width:1; vector-effect:non-scaling-stroke; }
+  #grain { position:fixed; inset:0; pointer-events:none; opacity:.16; mix-blend-mode:overlay; }
+  #start { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
+    background:rgba(111,123,122,.72); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); z-index:5; }
+  #start p { margin:0; font-size:14px; opacity:.8; text-align:center; line-height:1.5; }
+  button { appearance:none; border:0; border-radius:999px; font-weight:600; background:#f4f1ec; color:#44504e; }
+  #go { padding:16px 34px; font-size:17px; }
+  #bar { position:fixed; left:0; right:0; bottom:calc(10px + env(safe-area-inset-bottom)); display:flex; justify-content:center; gap:8px; z-index:4; }
+  #bar button { padding:9px 14px; font-size:12px; background:rgba(244,241,236,.82); }
+  #msg { position:fixed; top:calc(10px + env(safe-area-inset-top)); left:0; right:0; text-align:center; font-size:12px; opacity:.85; z-index:4; text-shadow:0 1px 4px rgba(0,0,0,.4); }
+</style>
+</head>
+<body>
+<div id="gem"></div>
+<svg id="lines" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+<svg id="grain"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter><rect width="100%" height="100%" filter="url(#n)"/></svg>
+<div id="msg"></div>
+<div id="bar">
+  <button id="flip">기울기 방향: A</button>
+  <button id="center">지금 자세를 가운데로</button>
+</div>
+<div id="start">
+  <button id="go">눌러서 열기</button>
+  <p>폰을 기울이면 또렷한 면이 옮겨 갑니다.<br>(임시 그림 · 사진 자리 9칸)</p>
+</div>
+<script>
+(function () {
+  var gem = document.getElementById('gem'), lines = document.getElementById('lines'), msg = document.getElementById('msg');
+
+  /* ---------- 면 모양: 가운데 팔각 면 하나 + 둘레 여덟 면 (좌표는 화면 % ) ---------- */
+  var RX = 27, RY = 19, D2R = Math.PI / 180;
+  function inner(k) { var a = (22.5 + 45 * k) * D2R; return [50 + RX * Math.cos(a), 50 + RY * Math.sin(a)]; }
+  function outer(k) { // 가운데에서 그 각도로 쏜 선이 화면 가장자리에 닿는 점
+    var a = (22.5 + 45 * k) * D2R, c = Math.cos(a), s = Math.sin(a), t = 50 / Math.max(Math.abs(c), Math.abs(s));
+    return [50 + c * t, 50 + s * t];
+  }
+  var corners = { 1: [100, 100], 3: [0, 100], 5: [0, 0], 7: [100, 0] };
+  var facets = [];
+  var table = []; for (var i = 0; i < 8; i++) table.push(inner(i));
+  facets.push({ pts: table, dir: [0, 0], ang: 0 });
+  for (var k = 0; k < 8; k++) { // k번째 둘레 면 = 각도 45k 방향
+    var p = [inner((k + 7) % 8), inner(k), outer(k)];
+    if (corners[k]) p.push(corners[k]);
+    p.push(outer((k + 7) % 8));
+    var a = 45 * k * D2R;
+    facets.push({ pts: p, dir: [0.9 * Math.cos(a), 0.9 * Math.sin(a)], ang: 45 * k });
+  }
+
+  /* ---------- 임시 그림 (나중에 웨딩 사진으로 바뀜) ---------- */
+  var tones = [['#e9d9cf', '#b98f86'], ['#d7dfe6', '#7f93a8'], ['#efe3c8', '#c2a468'], ['#dfe8dc', '#8aa387'], ['#ead6de', '#b07f95'],
+               ['#d9d6ea', '#8a84b3'], ['#f0dccd', '#c98d6a'], ['#d3e5e6', '#6fa3a6'], ['#e8e1d6', '#9c8f7c']];
+  function placeholder(n) {
+    var t = tones[n % tones.length], stripes = '';
+    for (var i = -10; i < 30; i++) stripes += '<line x1="' + (i * 22) + '" y1="0" x2="' + (i * 22 + 300) + '" y2="600" stroke="rgba(255,255,255,.35)" stroke-width="2"/>';
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 600" preserveAspectRatio="xMidYMid slice">' +
+      '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + t[0] + '"/><stop offset="1" stop-color="' + t[1] + '"/></linearGradient></defs>' +
+      '<rect width="400" height="600" fill="url(#g)"/>' + stripes +
+      '<circle cx="170" cy="250" r="34" fill="#fff" opacity=".9"/><rect x="132" y="290" width="76" height="130" rx="34" fill="#fff" opacity=".9"/>' +
+      '<circle cx="245" cy="262" r="30" fill="#3d4544" opacity=".85"/><rect x="212" y="298" width="66" height="122" rx="30" fill="#3d4544" opacity=".85"/>' +
+      '<text x="200" y="490" text-anchor="middle" font-family="Georgia,serif" font-size="46" fill="#fff">사진 ' + (n + 1) + '</text></svg>';
+    return 'url("data:image/svg+xml,' + encodeURIComponent(svg) + '")';
+  }
+
+  /* ---------- 면 만들기 ---------- */
+  facets.forEach(function (f, n) {
+    var xs = f.pts.map(function (p) { return p[0]; }), ys = f.pts.map(function (p) { return p[1]; });
+    var x0 = Math.min.apply(0, xs), x1 = Math.max.apply(0, xs), y0 = Math.min.apply(0, ys), y1 = Math.max.apply(0, ys);
+    var el = document.createElement('div'); el.className = 'facet';
+    el.style.cssText = 'left:' + x0 + '%;top:' + y0 + '%;width:' + (x1 - x0) + '%;height:' + (y1 - y0) + '%;';
+    var poly = f.pts.map(function (p) { return ((p[0] - x0) / (x1 - x0) * 100).toFixed(2) + '% ' + ((p[1] - y0) / (y1 - y0) * 100).toFixed(2) + '%'; }).join(',');
+    el.style.clipPath = el.style.webkitClipPath = 'polygon(' + poly + ')';
+    var img = placeholder(n);
+    el.innerHTML = '<div class="ph soft" style=\'background-image:' + img + '\'></div><div class="ph sharp" style=\'background-image:' + img + '\'></div><div class="glint" style="--a:' + (f.ang + 90) + 'deg"></div>';
+    gem.appendChild(el);
+    f.soft = el.children[0]; f.sharp = el.children[1]; f.glint = el.children[2]; f.w = 0;
+    var pg = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    pg.setAttribute('points', f.pts.map(function (p) { return p[0].toFixed(2) + ',' + p[1].toFixed(2); }).join(' '));
+    lines.appendChild(pg);
+  });
+
+  /* ---------- 기울기 → 또렷함 ---------- */
+  var target = [0, 0], cur = [0, 0], base = null, last = null, sign = -1, sensorLive = false, dragging = false;
+  var RANGE = 22; // 이 각도만큼 기울이면 맨 바깥 면
+  function clampLen(v) { var l = Math.hypot(v[0], v[1]); return l > 1 ? [v[0] / l, v[1] / l] : v; }
+  function onOri(e) {
+    if (e.beta == null) return;
+    sensorLive = true; last = [e.gamma || 0, e.beta || 0];
+    if (!base) base = last.slice();
+    if (!dragging) target = clampLen([sign * (last[0] - base[0]) / RANGE, sign * (last[1] - base[1]) / RANGE]);
+  }
+  function frame() {
+    cur[0] += (target[0] - cur[0]) * 0.12; cur[1] += (target[1] - cur[1]) * 0.12;
+    for (var i = 0; i < facets.length; i++) {
+      var f = facets[i], d = Math.hypot(cur[0] - f.dir[0], cur[1] - f.dir[1]);
+      var w = Math.max(0, Math.min(1, 1 - (d - 0.22) / 0.42)); w = w * w * (3 - 2 * w);
+      if (Math.abs(w - f.w) > 0.004) { f.w = w; f.sharp.style.opacity = w.toFixed(3); }
+      var tr = 'translate3d(' + (-cur[0] * 12).toFixed(1) + 'px,' + (-cur[1] * 12).toFixed(1) + 'px,0)';
+      f.soft.style.transform = tr; f.sharp.style.transform = tr;
+      var gl = i === 0 ? 0 : Math.max(0, 1 - Math.abs(d - 0.75) / 0.22) * 0.8; // 지나갈 때 잠깐 반짝
+      f.glint.style.opacity = gl.toFixed(2);
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  /* ---------- 시작(센서 허락) · 손가락 끌기 ---------- */
+  document.getElementById('go').addEventListener('click', function () {
+    document.getElementById('start').style.display = 'none';
+    var D = window.DeviceOrientationEvent;
+    function listen() {
+      window.addEventListener('deviceorientation', onOri, true);
+      setTimeout(function () { if (!sensorLive) msg.textContent = '센서 값이 없어요 — 손가락으로 끌어 보세요'; }, 2500);
+    }
+    if (D && typeof D.requestPermission === 'function') {
+      D.requestPermission().then(function (r) { if (r === 'granted') listen(); else msg.textContent = '센서 허락이 꺼져 있어요 — 손가락으로 끌어 보세요'; })
+        .catch(function () { msg.textContent = '손가락으로 끌어 보세요'; });
+    } else if (D) listen(); else msg.textContent = '손가락으로 끌어 보세요';
+  });
+  function fromPoint(e) { target = clampLen([(e.clientX / innerWidth - .5) * 2.2, (e.clientY / innerHeight - .5) * 2.2]); }
+  gem.addEventListener('pointerdown', function (e) { dragging = true; fromPoint(e); });
+  gem.addEventListener('pointermove', function (e) { if (dragging) fromPoint(e); });
+  function up() { dragging = false; if (!sensorLive) target = [0, 0]; }
+  gem.addEventListener('pointerup', up); gem.addEventListener('pointercancel', up);
+
+  var flip = document.getElementById('flip');
+  flip.addEventListener('click', function () { sign = -sign; flip.textContent = '기울기 방향: ' + (sign < 0 ? 'A' : 'B'); });
+  document.getElementById('center').addEventListener('click', function () { if (last) base = last.slice(); target = [0, 0]; });
+})();
+</script>
+</body>
+</html>
