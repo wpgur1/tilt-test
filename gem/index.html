@@ -32,6 +32,7 @@ var cv = document.getElementById('cv'), hint = document.getElementById('hint'), 
 var gl = cv.getContext('webgl', { alpha:false, antialias:true, powerPreference:'high-performance' });
 if (!gl) { msg.textContent = '이 브라우저에서는 화면을 그릴 수 없어요'; return; }
 var Q = new URLSearchParams(location.search);
+if (Q.get('frame')) { cv.style.cssText = 'left:50%;right:auto;width:calc(100vh*0.462);transform:translateX(-50%)'; document.body.style.background = '#222'; }
 
 /* ───────── 작은 도구 ───────── */
 var seed = 7;
@@ -138,7 +139,7 @@ PHOTOS.forEach(function (url, i) { if (!url || i > 8) return; var im = new Image
   im.src = url; });
 
 /* ═════════ 2. 첫 장면 (떠 있는 다이아몬드) ═════════ */
-var HH = 0.33, WK = 0.30, C0 = [0, 0.07];
+var HH = 0.36, WK = 0.325, C0 = [0, 0.07];
 function outline(t) { return [WK * Math.sin(t) * Math.pow((1 - Math.cos(t)) / 2, 0.6), -HH * Math.cos(t)]; }
 function lerp2(a, b, f) { return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]; }
 var gG = [], gM = [], gT = [], gS = [];
@@ -154,12 +155,12 @@ var gpos = [], gtri = []; // gtri: 삼각형마다 성질
 gemPolys.forEach(function (poly) { var cx = 0, cy = 0; poly.forEach(function (q) { cx += q[0]; cy += q[1]; }); cx /= poly.length; cy /= poly.length;
   cx += (rnd() - .5) * .02; cy += (rnd() - .5) * .02;
   for (var i = 0; i < poly.length; i++) { var q = poly[i], r = poly[(i + 1) % poly.length]; gpos.push(cx, cy, q[0], q[1], r[0], r[1]);
-    gtri.push({ spark:0, base:.34 + rnd() * .34, amp:.12 + rnd() * .22, ph:rnd() * 6.28, sp:.25 + rnd() * .6, x:(cx + q[0] + r[0]) / 3 }); } });
+    gtri.push({ spark:0, base:.50 + rnd() * .38, amp:.14 + rnd() * .26, ph:rnd() * 6.28, sp:.25 + rnd() * .6, x:(cx + q[0] + r[0]) / 3 }); } });
 var nSpark = 0;
-while (nSpark < 190) { var pt = [(rnd() - .5) * .5, (rnd() - .5) * .7 + C0[1] - .07]; if (!inside(pt, sil)) continue;
-  var sz = .004 + rnd() * rnd() * .022, ang = rnd() * 6.28;
+while (nSpark < 300) { var pt = [(rnd() - .5) * .5, (rnd() - .5) * .7 + C0[1] - .07]; if (!inside(pt, sil)) continue;
+  var sz = .005 + rnd() * rnd() * .030, ang = rnd() * 6.28;
   for (var v = 0; v < 3; v++) gpos.push(pt[0] + sz * Math.cos(ang + v * 2.094 + rnd() * .5), pt[1] + sz * Math.sin(ang + v * 2.094 + rnd() * .5));
-  gtri.push({ spark:1, ph:rnd() * 6.28, sp:.5 + rnd() * 1.6, pw:5 + rnd() * 14, tint:tints[Math.floor(rnd() * 3)], x:pt[0] }); nSpark++; }
+  gtri.push({ spark:1, ph:rnd() * 6.28, sp:.5 + rnd() * 1.6, pw:3 + rnd() * 9, tint:tints[Math.floor(rnd() * 3)], x:pt[0] }); nSpark++; }
 var gemPosBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, gemPosBuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(gpos), gl.STATIC_DRAW);
 var gcol = new Float32Array(gtri.length * 12), gemColBuf = gl.createBuffer();
 
@@ -183,7 +184,7 @@ var PP = prog(
   'uniform sampler2D uTex; uniform vec2 uPx; uniform float uBlur,uTime,uFlash,uA,uBokeh; varying vec2 vU;' +
   'void main(){ vec3 c=texture2D(uTex,vU).rgb; vec3 bloom=vec3(0.0); float a=0.0;' +
   ' for(int i=1;i<=18;i++){ float fi=float(i); a+=2.39996; float r=sqrt(fi/18.0); vec2 o=vec2(cos(a),sin(a))*r;' +
-  '   c+=texture2D(uTex,vU+o*uPx*uBlur).rgb; vec3 b=texture2D(uTex,vU+o*uPx*uBlur*3.4).rgb; bloom+=max(b-0.62,0.0); }' +
+  '   c+=texture2D(uTex,vU+o*uPx*uBlur).rgb; vec3 b=texture2D(uTex,vU+o*uPx*uBlur*3.4).rgb; bloom+=max(b-0.70,0.0); }' +
   ' c/=19.0; c+=bloom/18.0*2.6*vec3(1.0,0.93,0.88);' +
   ' vec2 s=vec2((vU.x-0.5)*2.0*uA,(0.5-vU.y)*2.0);' +
   ' float bd=length(s-vec2(0.085,-0.20)); c=mix(c,vec3(0.90,0.76,0.83),smoothstep(0.115,0.05,bd)*0.42*uBokeh);' +
@@ -204,7 +205,7 @@ function startSensor() { var D = window.DeviceOrientationEvent;
   function listen() { window.addEventListener('deviceorientation', onOri, true); }
   if (D && typeof D.requestPermission === 'function') D.requestPermission().then(function (r) { if (r === 'granted') listen(); }).catch(function () {});
   else if (D) listen(); }
-function fromPoint(e) { target = clampLen([(e.clientX / innerWidth - .5) * 2.3, (e.clientY / innerHeight - .5) * 2.3], 1); }
+function fromPoint(e) { var bx = cv.getBoundingClientRect(); target = clampLen([((e.clientX - bx.left) / bx.width - .5) * 2.3, ((e.clientY - bx.top) / bx.height - .5) * 2.3], 1); }
 cv.addEventListener('pointerdown', function (e) { if (stage === 0) { open(); return; } dragging = true; fromPoint(e); });
 cv.addEventListener('pointermove', function (e) { if (stage === 2 && (dragging || (e.pointerType === 'mouse' && !sensorLive))) fromPoint(e); });
 function up(e) { dragging = false; if (!sensorLive && e.pointerType !== 'mouse') target = [0, 0]; }
@@ -218,7 +219,7 @@ setTimeout(function () { if (stage === 0) hint.classList.add('on'); }, 900);
 if (Q.get('skip')) { stage = 2; }
 
 var W = 0, H = 0, A = 1;
-function resize() { var dpr = Math.min(window.devicePixelRatio || 1, 2); W = Math.round(innerWidth * dpr); H = Math.round(innerHeight * dpr);
+function resize() { var dpr = Math.min(window.devicePixelRatio || 1, 2); var bx = cv.getBoundingClientRect(); W = Math.round(bx.width * dpr); H = Math.round(bx.height * dpr);
   cv.width = W; cv.height = H; A = W / H; layoutFacets(A); }
 window.addEventListener('resize', resize); resize();
 function sm(a, b, x) { x = Math.max(0, Math.min(1, (x - a) / (b - a))); return x * x * (3 - 2 * x); }
@@ -230,7 +231,7 @@ function drawIntro(time, p) {
   var tl = cur[0] * 3 + cur[1] * 2, j = 0;
   for (var i = 0; i < gtri.length; i++) { var t = gtri[i], r, g, b, al;
     if (t.spark) { var s = Math.pow(Math.max(0, Math.sin(t.ph + time * t.sp + tl * 2)), t.pw); r = t.tint[0]; g = t.tint[1]; b = t.tint[2]; al = s; }
-    else { var sd = t.base + t.amp * Math.sin(t.ph + time * t.sp + tl); sd *= .55 + .45 * sm(-.2, .12, t.x); r = sd * .80; g = sd * .89; b = sd * .87; al = 1; }
+    else { var sd = t.base + t.amp * Math.sin(t.ph + time * t.sp + tl); sd *= .42 + .58 * sm(-.24, .02, t.x); r = sd * .80; g = sd * .89; b = sd * .87; al = 1; }
     for (var v = 0; v < 3; v++) { gcol[j++] = r; gcol[j++] = g; gcol[j++] = b; gcol[j++] = al; } }
   gl.bindFramebuffer(gl.FRAMEBUFFER, fbo); gl.viewport(0, 0, FBW, FBH);
   gl.clearColor(.55, .63, .61, 1); gl.clear(gl.COLOR_BUFFER_BIT);
@@ -246,7 +247,7 @@ function drawIntro(time, p) {
   gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H);
   gl.useProgram(PP.p); gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf); gl.enableVertexAttribArray(ppP); gl.vertexAttribPointer(ppP, 2, gl.FLOAT, false, 0, 0);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fboTex); gl.uniform1i(PP.u.uTex, 0);
-  gl.uniform2f(PP.u.uPx, 1 / FBW, 1 / FBH); gl.uniform1f(PP.u.uBlur, 2.6 + 7 * e); gl.uniform1f(PP.u.uTime, time); gl.uniform1f(PP.u.uA, A);
+  gl.uniform2f(PP.u.uPx, 1 / FBW, 1 / FBH); gl.uniform1f(PP.u.uBlur, 1.9 + 7 * e); gl.uniform1f(PP.u.uTime, time); gl.uniform1f(PP.u.uA, A);
   gl.uniform1f(PP.u.uBokeh, 1 - sm(0, .35, p)); gl.uniform1f(PP.u.uFlash, .9 * Math.exp(-Math.pow((p - .68) / .16, 2)));
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 }
