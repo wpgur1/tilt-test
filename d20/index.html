@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <meta name="theme-color" content="#86a9a7">
-<title>다이아몬드 시험 19</title>
+<title>다이아몬드 시험 20</title>
 <style>
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body { margin:0; height:100%; background:#86a9a7; color:#f6f2ec; overflow:hidden;
@@ -347,7 +347,7 @@ function drawProj() { var hw_ = Math.min(A, .62) * .97, Wc = 768, Hc = Math.roun
   var o = document.createElement('canvas'); o.width = Wc; o.height = Hc; var ox = o.getContext('2d'); ox.imageSmoothingEnabled = true; ox.imageSmoothingQuality = 'high'; ox.fillStyle = '#000'; ox.fillRect(0, 0, Wc, Hc);
   ox.globalCompositeOperation = 'lighter'; var s6 = soft(soft(soft(c, 2), 2), 1.6), s13 = soft(s6, 2), s32 = soft(s13, 2.5); ox.globalAlpha = .34; ox.drawImage(s6, 0, 0, Wc, Hc); ox.globalAlpha = .62; ox.drawImage(s13, 0, 0, Wc, Hc); ox.globalAlpha = .60; ox.drawImage(s32, 0, 0, Wc, Hc); ox.globalAlpha = .35; ox.drawImage(soft(s32, 2.5), 0, 0, Wc, Hc);
   gl.bindTexture(gl.TEXTURE_2D, texProj); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, o); projA = hw_; }
-var texEng = mkTex(), ENG_A = (parseFloat(Q.get('eng')) || -90) * Math.PI / 180, ENG_F = Q.get('engf') === '1' ? -1 : 1, ENG_V = Q.get('engv') === '1' ? -1 : 1;
+var texEng = mkTex(), ENG_A = (parseFloat(Q.get('eng')) || -122) * Math.PI / 180, ENG_F = Q.get('engf') === '1' ? -1 : 1, ENG_V = Q.get('engv') === '1' ? -1 : 1;
 function drawEng() { var Wc = 1024, Hc = 128, c = document.createElement('canvas'); c.width = Wc; c.height = Hc; var x = c.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, Wc, Hc);
   var fam = '"' + FONT + '", "Snell Roundhand", "Apple Chancery", cursive', fs = 92, gap, parts = ['LHG', null, 'YJH', '27.02.26'], ws, tot;
   for (var it = 0; it < 2; it++) { x.font = fs + 'px ' + fam; gap = fs * .30; ws = parts.map(function (t) { return t ? x.measureText(t).width : fs * .52; }); tot = ws.reduce(function (a, b) { return a + b; }, 0) + gap * 2 + gap * 2.2; if (tot > Wc * .93) fs *= Wc * .93 / tot; }
@@ -594,7 +594,7 @@ function frame(now) {
   gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, texDepth); gl.uniform1i(SCENE.u('uDepth'), 3);
   if (projA !== Math.min(A, .62) * .97 && stage !== 2) drawProj();
   gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, texProj); gl.uniform1i(SCENE.u('uProj'), 4); gl.uniform4f(SCENE.u('uPj'), 0, .02, Math.min(A, .62) * .97, PJ_H);
-  gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D, texEng); gl.uniform1i(SCENE.u('uEngT'), 5); gl.uniform4f(SCENE.u('uEng'), ENG_A, 1.04, ENG_F, .30 * ENG_V);
+  gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D, texEng); gl.uniform1i(SCENE.u('uEngT'), 5); gl.uniform4f(SCENE.u('uEng'), ENG_A, 1.18, ENG_F, .34 * ENG_V);
   var la = cur[0] * .55;
   var bi = 0, bf = -9; for (var qi = 0; qi < 9; qi++) { var fy_ = R[3] * planes[qi][0] + R[4] * planes[qi][1] + R[5] * planes[qi][2]; if (fy_ > bf) { bf = fy_; bi = qi; } }
   if (bi !== focI) { focI = bi; reflW = 0; if (stage === 2) { chime([2637 + bi * 90], .012, .5); if (navigator.vibrate) navigator.vibrate(6); } } reflW += (1 - reflW) * .06;
