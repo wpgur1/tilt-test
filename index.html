@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>기울기 시험</title>
+<style>
+  :root { --bg:#8f9c9a; --ink:#f4f1ec; --dim:rgba(244,241,236,.6); --ok:#bfe8c9; --bad:#ffc9bd; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+    overscroll-behavior:none; touch-action:none; user-select:none; -webkit-user-select:none; }
+  main { height:100%; display:flex; flex-direction:column; align-items:center; padding:20px 16px calc(16px + env(safe-area-inset-bottom)); gap:14px; }
+  h1 { font-size:17px; font-weight:600; margin:6px 0 0; }
+  #state { font-size:15px; text-align:center; min-height:44px; line-height:1.45; }
+  #state.ok { color:var(--ok); } #state.bad { color:var(--bad); }
+  #pad { position:relative; width:min(78vw,340px); aspect-ratio:1; border-radius:50%;
+    border:1px solid rgba(255,255,255,.45); background:radial-gradient(circle at 50% 50%, rgba(255,255,255,.16), rgba(255,255,255,.03) 70%); flex:none; }
+  #pad::before,#pad::after { content:""; position:absolute; background:rgba(255,255,255,.25); }
+  #pad::before { left:50%; top:8%; bottom:8%; width:1px; } #pad::after { top:50%; left:8%; right:8%; height:1px; }
+  #dot { position:absolute; left:50%; top:50%; width:34px; height:34px; margin:-17px 0 0 -17px; border-radius:50%;
+    background:#fff; box-shadow:0 0 22px rgba(255,255,255,.9); will-change:transform; }
+  #nums { font-variant-numeric:tabular-nums; font-size:15px; text-align:center; line-height:1.6; }
+  #nums b { font-size:22px; font-weight:600; }
+  button { appearance:none; border:0; border-radius:999px; padding:16px 34px; font-size:17px; font-weight:600;
+    background:var(--ink); color:#44504e; }
+  #info { font-size:12px; color:var(--dim); text-align:center; line-height:1.5; word-break:break-all; max-width:340px; }
+  #code { font-size:14px; padding:8px 14px; border:1px dashed rgba(255,255,255,.5); border-radius:10px; text-align:center; }
+</style>
+</head>
+<body>
+<main>
+  <h1>기울기 시험</h1>
+  <div id="state">아래 단추를 누른 뒤 폰을 이리저리 기울여 보세요.</div>
+  <div id="pad"><div id="dot"></div></div>
+  <div id="nums">앞뒤 <b id="b">–</b>° · 좌우 <b id="g">–</b>°<br><span id="hz">초당 0번</span></div>
+  <button id="go">눌러서 시작</button>
+  <div id="code">결과 코드: 아직 없음</div>
+  <div id="info"></div>
+</main>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var ua = navigator.userAgent;
+  var app = /KAKAOTALK/i.test(ua) ? '카카오톡' : /NAVER\(inapp/i.test(ua) ? '네이버앱' : /Instagram/i.test(ua) ? '인스타' :
+            /CriOS|Chrome/i.test(ua) && !/SamsungBrowser/i.test(ua) ? '크롬' : /SamsungBrowser/i.test(ua) ? '삼성인터넷' : /Safari/i.test(ua) ? '사파리' : '기타';
+  var os = /iPhone|iPad|iPod/i.test(ua) ? '아이폰' : /Android/i.test(ua) ? '안드로이드' : '컴퓨터';
+  var secure = window.isSecureContext;
+  var hasAPI = 'DeviceOrientationEvent' in window;
+  var needAsk = hasAPI && typeof DeviceOrientationEvent.requestPermission === 'function';
+  var framed = window.self !== window.top;
+
+  var count = 0, total = 0, perm = '-', dragging = false, sensorLive = false;
+  var pad = $('pad'), dot = $('dot');
+
+  function move(nx, ny) { // -1..1
+    var r = pad.clientWidth / 2 - 20;
+    var len = Math.hypot(nx, ny); if (len > 1) { nx /= len; ny /= len; }
+    dot.style.transform = 'translate(' + (nx * r).toFixed(1) + 'px,' + (ny * r).toFixed(1) + 'px)';
+  }
+  function setState(text, cls) { var s = $('state'); s.textContent = text; s.className = cls || ''; }
+  function code(result) {
+    $('code').textContent = '결과 코드: ' + os + ' · ' + app + ' · ' + result;
+  }
+  function info() {
+    $('info').textContent = os + ' / ' + app + ' / 보안주소 ' + (secure ? '○' : '✕') + ' / 센서기능 ' + (hasAPI ? '○' : '✕') +
+      ' / 허락창 ' + (needAsk ? '필요' : '불필요') + ' / 허락 ' + perm + (framed ? ' / 틀 안' : '') + ' — ' + ua;
+  }
+  info();
+
+  function onOri(e) {
+    if (e.beta == null && e.gamma == null) return;
+    sensorLive = true; count++; total++;
+    var b = e.beta || 0, g = e.gamma || 0;
+    $('b').textContent = b.toFixed(0); $('g').textContent = g.toFixed(0);
+    if (!dragging) move(g / 35, (b - 45) / 35); // 폰을 45도쯤 세워 든 자세가 가운데
+    if (total === 5) { setState('센서 됨 — 기울이면 흰 점이 따라 움직여요.', 'ok'); code('센서 됨'); }
+  }
+  setInterval(function () { $('hz').textContent = '초당 ' + count + '번'; count = 0; }, 1000);
+
+  function listen() {
+    window.addEventListener('deviceorientation', onOri, true);
+    setTimeout(function () {
+      if (!sensorLive) {
+        setState('센서 값이 안 와요 — 손가락으로 원 안을 끌어 보세요(대신하는 방식).', 'bad');
+        code('센서 안 됨(값 없음 · 허락 ' + perm + ')');
+      }
+    }, 2500);
+  }
+
+  $('go').addEventListener('click', function () {
+    if (!hasAPI) { setState('이 브라우저에는 기울기 센서 기능이 없어요 — 손가락으로 끌어 보세요.', 'bad'); code('센서 기능 없음'); return; }
+    if (!secure) { setState('보안 주소(https)가 아니라 센서를 못 켜요.', 'bad'); code('https 아님'); }
+    if (needAsk) {
+      setState('허락 창이 뜨면 「허용」을 눌러 주세요.');
+      DeviceOrientationEvent.requestPermission().then(function (r) {
+        perm = r; info();
+        if (r === 'granted') listen();
+        else { setState('허락이 거절됐어요 — 손가락으로 끌어 보세요.', 'bad'); code('허락 거절(' + r + ')'); }
+      }).catch(function (err) {
+        perm = '오류'; info();
+        setState('허락 창을 못 띄웠어요 — 손가락으로 끌어 보세요.', 'bad'); code('허락 창 오류: ' + (err && err.name || err));
+      });
+    } else { perm = '불필요'; info(); listen(); }
+    this.textContent = '다시 시도';
+  });
+
+  // 손가락 끌기 (센서 대신)
+  function fromPoint(x, y) {
+    var r = pad.getBoundingClientRect();
+    move((x - r.left - r.width / 2) / (r.width / 2), (y - r.top - r.height / 2) / (r.height / 2));
+  }
+  pad.addEventListener('pointerdown', function (e) { dragging = true; pad.setPointerCapture(e.pointerId); fromPoint(e.clientX, e.clientY); });
+  pad.addEventListener('pointermove', function (e) { if (dragging) fromPoint(e.clientX, e.clientY); });
+  function up() { dragging = false; if (!sensorLive) move(0, 0); }
+  pad.addEventListener('pointerup', up); pad.addEventListener('pointercancel', up);
+})();
+</script>
+</body>
+</html>
