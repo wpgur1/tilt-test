@@ -121,13 +121,13 @@ var SCENE = prog(VS, [
 'vec3 backdrop(vec2 s){',                                                     // 연한 청회색 종이 바탕
 '  vec2 q=(s-uGem.xy)/max(uGem.z,0.001); float fx=uGem.w;',
 '  vec2 a=s-vec2(-0.08,0.10); float l1=exp(-dot(a,a)*0.55);',
-'  vec3 c=mix(vec3(0.31,0.47,0.48),vec3(0.63,0.80,0.79),l1);',
+'  vec3 c=mix(vec3(0.33,0.47,0.48),vec3(0.64,0.785,0.78),l1);',
 '  vec2 b=s-vec2(0.50,-0.75); c+=vec3(0.05,0.03,0.035)*exp(-dot(b,b)*1.2);',
 '  float n=fbm(s*1.6+3.0);',
 '  c*=0.95+0.10*n;',
 '  vec2 pv=(s-uPj.xy)/uPj.zw; if(abs(pv.x)<1.0 && abs(pv.y)<1.0){ vec2 pj=vec2(pv.x*0.5+0.5,0.5-pv.y*0.5);',
 '    float tx=texture2D(uProj,pj).r*0.7+texture2D(uProj,pj+vec2(0.005,0.003)).r*0.3;',
-'    c+=vec3(1.0,0.97,0.90)*tx*(0.30+0.14*n)*uGem.w*(0.94+0.06*sin(uTime*13.0)*sin(uTime*5.3)); }',
+'    c+=vec3(1.0,0.97,0.90)*tx*(0.20+0.12*n)*uGem.w*(0.94+0.06*sin(uTime*13.0)*sin(uTime*5.3)); }',
 '  c+=vec3(0.11,0.10,0.095)*exp(-dot(q,q)*0.30)*fx;',                         // 보석 둘레로 번지는 빛
 '  float u=uGem.z*0.050;',
 '  for(int i=0;i<24;i++){ vec3 k=uCa[i]; vec2 dq=s-k.xy; vec2 dir=normalize(k.xy-uGem.xy+vec2(1e-4)); float al=dot(dq,dir); float pe=dot(dq,vec2(-dir.y,dir.x));',
@@ -181,8 +181,8 @@ var SCENE = prog(VS, [
 '  if(uMetal>0.5){ float tp=(uCam.y-uPlY)/max(0.2,-dw.y); vec3 so=(uCam+dw*tp)*uR; vec3 sl=uLw*uR;',
 '    vec3 oc2=so-vec3(0.0,-2.5,0.0); float b2=dot(oc2,sl); float d2=b2*b2-(dot(oc2,oc2)-14.5);',
 '    if(d2>0.0){ float sq2=sqrt(d2); float t=max(-b2-sq2,0.05); float te=-b2+sq2; float res=1.0;',
-'      for(int i=0;i<24;i++){ vec3 qq=so+sl*t; float h=min(sdRing(qq),sdGemA(qq)+0.05); res=min(res,13.0*h/t); if(h<0.003){ res=0.0; break; } t+=clamp(h,0.05,0.55); if(t>te) break; }',
-'      res=clamp(res,0.0,1.0); res=res*res*(3.0-2.0*res); col*=mix(vec3(0.40,0.57,0.60),vec3(1.0),res); } }',
+'      for(int i=0;i<24;i++){ vec3 qq=so+sl*t; float h=min(sdRing(qq),sdGemA(qq)+0.05); res=min(res,7.5*h/t); if(h<0.003){ res=0.0; break; } t+=clamp(h,0.05,0.55); if(t>te) break; }',
+'      res=clamp(res,0.0,1.0); res=res*res*(3.0-2.0*res); col*=mix(vec3(0.56,0.69,0.71),vec3(1.0),res); } }',
 '  float tN=-1e9,tN2=-1e9,tF=1e9; vec3 nN=vec3(0.0,1.0,0.0); vec3 nN2=vec3(0.0,1.0,0.0); float fi=-1.0; bool hitG=false;',
 '  float b=dot(o,d); float disc=b*b-(dot(o,o)-1.10);',
 '  if(disc>0.0){',
@@ -318,7 +318,7 @@ function drawProj() { var hw_ = Math.min(A, .62) * .97, Wc = 768, Hc = Math.roun
   x.fillStyle = '#000'; x.fillRect(0, 0, Wc, Hc); x.translate(Wc / 2, Hc / 2); x.rotate(-7 * Math.PI / 180); x.translate(-Wc / 2, -Hc / 2);
   x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillStyle = 'rgba(255,255,255,.92)'; x.strokeStyle = 'rgba(255,255,255,.92)'; x.shadowColor = '#fff';
   function word(t, cx, cy, wFrac) { var fs = 200; x.font = fs + 'px "Great Vibes", "Snell Roundhand", "Apple Chancery", cursive'; fs = fs * Wc * wFrac / x.measureText(t).width; x.font = fs + 'px "Great Vibes", "Snell Roundhand", "Apple Chancery", cursive';
-    x.shadowBlur = 26; x.fillText(t, cx, cy); x.shadowBlur = 9; x.fillText(t, cx, cy); }
+    x.shadowBlur = 34; x.fillText(t, cx, cy); x.shadowBlur = 14; x.fillText(t, cx, cy); }
   word('Hangyul', Wc * .46, Hc * .165, .80); word('Jehyuk', Wc * .56, Hc * .855, .70);
   var hx = Wc * .80, hy = Hc * .335, r = Wc * .050; x.lineWidth = 5; x.lineCap = 'round'; x.lineJoin = 'round';
   for (var k = 0; k < 2; k++) { x.shadowBlur = k ? 8 : 22; x.beginPath(); x.moveTo(hx, hy + r * 1.05); x.bezierCurveTo(hx - r * 2.0, hy - r * .25, hx - r * .95, hy - r * 1.55, hx, hy - r * .50); x.bezierCurveTo(hx + r * .95, hy - r * 1.55, hx + r * 2.0, hy - r * .25, hx, hy + r * 1.05); x.stroke(); }
