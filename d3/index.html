@@ -93,9 +93,9 @@ var HASH = 'float hash(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32
 
 var SCENE = prog(VS, [
 'precision highp float;',
-'varying vec2 vU; uniform float uA,uTan,uPhoto,uGlow; uniform vec3 uCam; uniform mat3 uR;',
+'varying vec2 vU; uniform float uA,uTan,uPhoto,uGlow,uSpark; uniform vec3 uCam; uniform mat3 uR;',
 'uniform vec4 uPl[73]; uniform vec3 uFC[9]; uniform vec3 uFU[9]; uniform vec3 uFV[9]; uniform sampler2D uSharp,uSoft;',
-'const float F0=0.172;',
+'const float F0=0.172;', HASH,
 'vec3 env(vec3 d){',
 '  float y=d.y; vec3 c=mix(vec3(0.07,0.09,0.09),vec3(0.60,0.68,0.66),smoothstep(-0.7,0.75,y));',
 '  float az=atan(d.z,d.x);',
@@ -107,6 +107,9 @@ var SCENE = prog(VS, [
 '  c+=vec3(4.0,2.9,3.4)*smoothstep(0.985,0.996,dot(d,vec3(0.10,0.55,0.83)));',
 '  c+=vec3(3.2,3.4,3.8)*smoothstep(0.992,0.999,dot(d,vec3(-0.50,0.80,-0.33)));',
 '  c+=vec3(1.5,1.4,1.3)*smoothstep(0.93,0.975,dot(d,vec3(-0.80,0.25,-0.54)));',
+'  vec2 g=d.xz/(1.0+abs(d.y))*6.5; vec2 id=floor(g); float h=hash(id+(d.y>0.0?3.0:19.0));',
+'  vec2 f=fract(g)-0.5-(vec2(fract(h*13.7),fract(h*29.3))-0.5)*0.6;',
+'  c+=step(0.72,h)*smoothstep(0.13,0.03,length(f))*mix(vec3(7.0,6.6,6.2),vec3(7.5,4.8,4.0),step(0.6,fract(h*7.1)))*uSpark;',
 '  return c; }',
 'void main(){',
 '  vec2 s=vU*2.0-1.0; s.x*=uA;',
@@ -124,7 +127,8 @@ var SCENE = prog(VS, [
 '      vec3 p=o+d*tN; float cv0=dot(-d,nN); float F=F0+(1.0-F0)*pow(1.0-cv0,5.0);',
 '      vec3 refl=env(uR*reflect(d,nN));',
 '      vec3 rd=refract(d,nN,1.0/2.417); vec3 rd0=rd; vec3 thr=vec3(1.0-F); vec3 acc=vec3(0.0); vec3 q=p;',
-'      for(int bnc=0;bnc<6;bnc++){',
+'      bool lite=(fi<8.5 && uPhoto>0.999);',
+'      if(!lite){ for(int bnc=0;bnc<5;bnc++){',
 '        float tE=1e9; vec3 nE=vec3(0.0,1.0,0.0);',
 '        for(int i=0;i<73;i++){ vec4 P=uPl[i]; float dn=dot(P.xyz,rd); if(dn>1e-5){ float t=(P.w-dot(P.xyz,q))/dn; if(t<tE){ tE=t; nE=P.xyz; } } }',
 '        q+=rd*tE; float ci=dot(rd,nE); float kk=1.0-2.417*2.417*(1.0-ci*ci);',
@@ -133,7 +137,7 @@ var SCENE = prog(VS, [
 '          vec3 e=vec3(env(uR*dR).r,env(uR*dG).g,env(uR*dB).b); acc+=thr*(1.0-Fo)*e; thr*=Fo; }',
 '        rd=reflect(rd,nE);',
 '      }',
-'      acc+=thr*vec3(0.30,0.34,0.33);',
+'      acc+=thr*vec3(0.30,0.34,0.33); }',
 '      vec3 gem=refl*F+acc;',
 '      float edge=smoothstep(0.018,0.0,tN-tN2);',
 '      if(fi<8.5 && uPhoto>0.001){',                                         // 사진이 든 면
@@ -144,8 +148,8 @@ var SCENE = prog(VS, [
 '        vec2 cell=vec2(mod(fi,3.0),floor(fi/3.0+0.001)); vec2 auv=(cell+uv)/3.0;',
 '        float face=(uR*nN).y; float w=smoothstep(0.925,0.993,face);',
 '        vec3 soft=mix(texture2D(uSoft,auv).rgb,haze,0.18); vec3 ph=mix(soft,texture2D(uSharp,auv).rgb,w);',
-'        float a=uPhoto*(0.74+0.24*w);',
-'        gem=mix(gem,ph+refl*F*0.6,a);',
+'        float a=uPhoto*(0.78+0.22*w); if(lite) a=1.0;',
+'        gem=mix(gem,ph*(0.93+0.07*w)+refl*F*(1.25-0.75*w),a);',
 '      }',
 '      gem+=vec3(1.0,0.98,0.95)*edge*0.22;',
 '      col=gem*uGlow;',
@@ -229,14 +233,14 @@ function up(e) { dragging = false; if (!sensorLive && e.pointerType !== 'mouse')
 cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
 
 /* ═════════ 6. 흐름 ═════════ */
-var stage = 0, openAt = 0, OPEN_MS = 3600, psi0 = 0, psiF = 0, BETA = 60 * D2R, SPIN = 0.22, TANH = Math.tan(14 * D2R);
+var stage = 0, openAt = 0, OPEN_MS = 3600, psi0 = 0, psiF = 0, BETA = 52 * D2R, SPIN = 0.22, TANH = Math.tan(14 * D2R);
 function open() { if (stage !== 0) return; var now = performance.now(); stage = 1; openAt = now; hint.classList.remove('on'); startSensor();
   psi0 = now / 1000 * SPIN; psiF = (Math.ceil(psi0 / (Math.PI / 4)) + 2) * Math.PI / 4; setAxes(psiF);
   setTimeout(function () { hint.textContent = sensorLive ? '폰을 기울여 보세요' : '화면을 끌어 보세요'; hint.classList.add('on'); setTimeout(function () { hint.classList.remove('on'); }, 3800); }, OPEN_MS + 400); }
 setTimeout(function () { if (stage === 0) hint.classList.add('on'); }, 900);
 if (Q.get('skip')) stage = 2;
 
-var frames = 0, acc = 0, last = 0;
+var frames = 0, acc = 0, last = 0, glint = 0;
 function frame(now) {
   var time = now / 1000, dt = last ? now - last : 16; last = now;
   /* 느리면 해상도를 낮추고, 여유 있으면 올림 */
@@ -258,9 +262,9 @@ function frame(now) {
   var fS = [rK * ca * s, yT + (yK - yT) * s, rK * sa * s];                    // 정면이 된 면의 가운데
   var c0 = [0, -0.28, 0], foc = [c0[0] + (fS[0] - c0[0]) * e, c0[1] + (fS[1] - c0[1]) * e, c0[2] + (fS[2] - c0[2]) * e];
   var tw = app(Rpre, foc);
-  var dFar = Math.max(3.3 / A, 5.4) / (2 * TANH), dNear = (1.95 - 0.62 * s) / (2 * TANH);
+  var dFar = Math.max(3.3 / A, 5.4) / (2 * TANH), dNear = (1.82 - 0.80 * s) / (2 * TANH);
   var dist = dFar * Math.pow(dNear / dFar, e) + Math.sin(time * .5) * .05 * (1 - e);
-  var cam = [tw[0], tw[1] + dist, tw[2] - 0.03 * dist * (1 - e)];
+  var hs = 0.004 * dist; var cam = [tw[0] + hs * Math.sin(time * 1.3) * Math.sin(time * .31), tw[1] + dist, tw[2] - 0.03 * dist * (1 - e) + hs * Math.sin(time * 1.1 + 2)];
 
   if (dirty) upload();
   gl.bindFramebuffer(gl.FRAMEBUFFER, fbo); gl.viewport(0, 0, FW, FH);
@@ -268,7 +272,7 @@ function frame(now) {
   gl.uniform1f(SCENE.u('uA'), A); gl.uniform1f(SCENE.u('uTan'), TANH); gl.uniform3f(SCENE.u('uCam'), cam[0], cam[1], cam[2]);
   gl.uniformMatrix3fv(SCENE.u('uR'), false, new Float32Array([R[0], R[3], R[6], R[1], R[4], R[7], R[2], R[5], R[8]]));
   gl.uniform4fv(SCENE.u('uPl[0]'), flatPl); gl.uniform3fv(SCENE.u('uFC[0]'), uFC); gl.uniform3fv(SCENE.u('uFU[0]'), uFU); gl.uniform3fv(SCENE.u('uFV[0]'), uFV);
-  gl.uniform1f(SCENE.u('uPhoto'), sm(0.62, 0.97, p)); gl.uniform1f(SCENE.u('uGlow'), 1.0);
+  gl.uniform1f(SCENE.u('uPhoto'), sm(0.62, 0.97, p)); gl.uniform1f(SCENE.u('uGlow'), 1.0 + .12 * glint); gl.uniform1f(SCENE.u('uSpark'), .55 + .45 * (1 - e) + 1.2 * glint);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, texSharp); gl.uniform1i(SCENE.u('uSharp'), 0);
   gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, texSoft); gl.uniform1i(SCENE.u('uSoft'), 1);
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -277,9 +281,11 @@ function frame(now) {
   gl.useProgram(POST.p); gl.enableVertexAttribArray(POST.a); gl.vertexAttribPointer(POST.a, 2, gl.FLOAT, false, 0, 0);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, fboTex); gl.uniform1i(POST.u('uTex'), 0);
   gl.uniform2f(POST.u('uPx'), 1 / W, 1 / H); gl.uniform1f(POST.u('uTime'), time); gl.uniform1f(POST.u('uA'), A);
+  var br = Math.max(0, Math.sin(time * .47) + .6 * Math.sin(time * .83 + 1.3) + .35 * Math.sin(time * 1.9 + .4) - .55); br = br * br;   // 가만히 있어도 초점이 살짝 풀렸다 맞음
+  var spd = Math.min(1, Math.hypot(target[0] - cur[0], target[1] - cur[1]) * 2.2); glint += (spd - glint) * (spd > glint ? .25 : .04);
   var hunt = Math.pow(Math.sin(Math.PI * p), 2);                              // 다가가는 동안 초점이 잠깐 풀렸다가 맞음
-  gl.uniform1f(POST.u('uBlur'), (2.6 * (1 - e) + 0.5 * e + 5.0 * hunt) * (W / 780));
-  gl.uniform1f(POST.u('uEdge'), 2.4 * e * (W / 780)); gl.uniform1f(POST.u('uBloom'), 2.2 - 1.0 * e);
+  gl.uniform1f(POST.u('uBlur'), (2.2 * (1 - e) + 0.45 * e + 5.0 * hunt + br * (3.2 - 2.3 * e)) * (W / 780));
+  gl.uniform1f(POST.u('uEdge'), 2.4 * e * (W / 780)); gl.uniform1f(POST.u('uBloom'), 2.2 - 1.0 * e + 2.5 * glint + br * .8);
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   requestAnimationFrame(frame);
 }
