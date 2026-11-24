@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
 <meta name="theme-color" content="#86a9a7">
 <title>다이아몬드 시험 12</title>
 <style>
@@ -35,7 +34,7 @@
 </head>
 <body>
 <canvas id="cv"></canvas>
-<div id="hint">눌러서 열기</div>
+<div id="hint">화면을 눌러 축하해주세요</div>
 <div id="msg"></div>
 <div id="vw"><div id="vtrack"></div><div id="vg"></div><button id="vx" aria-label="닫기">×</button><div id="vn"></div></div>
 <script>
@@ -49,6 +48,8 @@ var cv = document.getElementById('cv'), hint = document.getElementById('hint'), 
 var gl = cv.getContext('webgl', { alpha:false, antialias:false, powerPreference:'high-performance' });
 if (!gl) { msg.textContent = '이 브라우저에서는 화면을 그릴 수 없어요'; return; }
 var Q = new URLSearchParams(location.search);
+var FONT = (Q.get('font') || 'Great Vibes').replace(/[^A-Za-z ]/g, '');
+(function () { var l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=' + FONT.replace(/ /g, '+') + '&display=swap'; document.head.appendChild(l); })();
 if (Q.get('frame')) { cv.style.cssText = 'left:50%;right:auto;width:calc(100vh*0.462);transform:translateX(-50%)'; document.body.style.background = '#222'; }
 
 /* ───────── 벡터 도구 ───────── */
@@ -325,13 +326,13 @@ var PJ_H = .82, projA = 0;
 function drawProj() { var hw_ = Math.min(A, .62) * .97, Wc = 768, Hc = Math.round(Wc * PJ_H / hw_), c = document.createElement('canvas'); c.width = Wc; c.height = Hc; var x = c.getContext('2d');
   x.fillStyle = '#000'; x.fillRect(0, 0, Wc, Hc); 
   x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillStyle = 'rgba(255,255,255,.92)'; x.strokeStyle = 'rgba(255,255,255,.92)'; x.shadowColor = '#fff';
-  function word(t, cx, cy, wFrac) { var fs = 200; x.font = fs + 'px "Great Vibes", "Snell Roundhand", "Apple Chancery", cursive'; fs = fs * Wc * wFrac / x.measureText(t).width; x.font = fs + 'px "Great Vibes", "Snell Roundhand", "Apple Chancery", cursive';
+  function word(t, cx, cy, wFrac) { var fs = 200; x.font = fs + 'px "' + FONT + '", "Snell Roundhand", "Apple Chancery", cursive'; fs = fs * Wc * wFrac / x.measureText(t).width; x.font = fs + 'px "' + FONT + '", "Snell Roundhand", "Apple Chancery", cursive';
     x.shadowBlur = 46; x.fillText(t, cx, cy); x.shadowBlur = 20; x.fillText(t, cx, cy); }
   word('Hangyul', Wc * .50, Hc * .352, .66); word('Jehyuk', Wc * .52, Hc * .800, .58);
   var hx = Wc * .50, hy = Hc * .640, r = Wc * .060; x.lineWidth = 6; x.lineCap = 'round'; x.lineJoin = 'round';
   for (var k = 0; k < 2; k++) { x.shadowBlur = k ? 8 : 22; x.beginPath(); x.moveTo(hx, hy + r * 1.05); x.bezierCurveTo(hx - r * 2.0, hy - r * .25, hx - r * .95, hy - r * 1.55, hx, hy - r * .50); x.bezierCurveTo(hx + r * .95, hy - r * 1.55, hx + r * 2.0, hy - r * .25, hx, hy + r * 1.05); x.stroke(); }
   gl.bindTexture(gl.TEXTURE_2D, texProj); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, c); projA = hw_; }
-if (document.fonts && document.fonts.load) document.fonts.load('200px "Great Vibes"').then(function () { projA = -1; }, function () {}); 
+if (document.fonts && document.fonts.load) document.fonts.load('200px "' + FONT + '"').then(function () { projA = -1; }, function () {}); 
 var quad = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, quad); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
 var flatPl = new Float32Array(NP * 4); planes.forEach(function (p, i) { flatPl.set(p, i * 4); });
 
@@ -513,7 +514,7 @@ function frame(now) {
   for (var ax_ = 0; ax_ < 2; ax_++) { cv2[ax_] += ((target[ax_] - cur[ax_]) * (stage === 2 ? 26 : 60) - cv2[ax_] * (stage === 2 ? 10.5 : 12.5)) * hstep; cur[ax_] += cv2[ax_] * hstep; }
   vel = Math.hypot(cv2[0], cv2[1]);
   var p = stage === 0 ? 0 : stage === 2 ? 1 : stage === 3 ? Math.max(0, 1 - (now - closeAt) / CLOSE_MS) : Math.min(1, (now - openAt) / OPEN_MS);
-  if (stage === 3 && p <= 0) { stage = 0; lam1S = lam2S = 0; hint.textContent = '눌러서 열기'; hint.classList.add('on'); }
+  if (stage === 3 && p <= 0) { stage = 0; lam1S = lam2S = 0; hint.textContent = '화면을 눌러 축하해주세요'; hint.classList.add('on'); }
   if (stage === 1 && p >= 1) stage = 2;
   var e = p * p * p * (p * (p * 6 - 15) + 10);                               // 천천히 시작해 천천히 멈춤
   /* 보석 자세 */
